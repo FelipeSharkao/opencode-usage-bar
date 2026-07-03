@@ -1,15 +1,32 @@
-import type { TuiPlugin, TuiThemeCurrent } from "@opencode-ai/plugin/tui"
+import type { TuiPlugin, TuiPluginModule, TuiThemeCurrent } from "@opencode-ai/plugin/tui"
+import type { OpencodeClient } from "@opencode-ai/sdk/v2"
 import type { BoxRenderable } from "@opentui/core"
-import { createContext, createSignal, onMount, useContext } from "solid-js"
+import {
+    createContext,
+    createSignal,
+    For,
+    onCleanup,
+    onMount,
+    useContext,
+} from "solid-js"
+import { pollClaudeUsage, type UsageItem } from "./claude-usage"
+import { createStore, reconcile } from "solid-js/store"
+
+const PluginContext = createContext<{
+    theme: TuiThemeCurrent
+    client: OpencodeClient
+}>()
 
 const tui: TuiPlugin = async (api) => {
     api.slots.register({
         order: 100,
         slots: {
-            sidebar_content: (ctx) => (
-                <Context.Provider value={{ theme: ctx.theme.current }}>
+            sidebar_content: () => (
+                <PluginContext.Provider
+                    value={{ theme: api.theme.current, client: api.client }}
+                >
                     <SidebarUsage />
-                </Context.Provider>
+                </PluginContext.Provider>
             ),
         },
     })
@@ -18,33 +35,62 @@ const tui: TuiPlugin = async (api) => {
 export default {
     id: "opencode-claude-usage",
     tui,
-}
-
-const Context = createContext<{
-    theme: TuiThemeCurrent
-}>()
+} satisfies TuiPluginModule
 
 function SidebarUsage() {
-    const { theme } = useContext(Context)!
+    const { theme } = useContext(PluginContext)!
+
+    const usage = useClaudeUsage()
+
     return (
         <box width="100%">
             <text width="100%" fg={theme.text}>
                 <b>Claude Usage</b>
             </text>
-            <ProgressBar label="Current session" progress={0.7} resets="4:44pm" />
-            <ProgressBar label="All models" progress={0.5} resets="4:44pm" />
-            <ProgressBar label="Fable" progress={0.2} resets="4:44pm" />
+            <For each={usage}>
+                {(item) => (
+                    <ProgressBar
+                        label={item.name}
+                        progress={item.percent}
+                        resets={item.resets}
+                    />
+                )}
+            </For>
         </box>
     )
 }
 
+function useClaudeUsage() {
+    const { client } = useContext(PluginContext)!
+
+    const [store, setStore] = createStore<UsageItem[]>([])
+
+    onMount(() => {
+        const stop = pollClaudeUsage({
+            onResult: (usage) => setStore(reconcile(usage)),
+            pollSeconds: 60,
+            log: (message, extra) =>
+                client.app.log({
+                    service: "opencode-claude-usage",
+                    level: "info",
+                    message,
+                    extra,
+                }),
+        })
+
+        onCleanup(() => stop())
+    })
+
+    return store
+}
+
 type ProgressBarProps = {
     label: string
-    resets: string
+    resets: string | undefined
     progress: number
 }
 function ProgressBar(props: ProgressBarProps) {
-    const { theme } = useContext(Context)!
+    const { theme } = useContext(PluginContext)!
 
     let ref!: BoxRenderable
 
