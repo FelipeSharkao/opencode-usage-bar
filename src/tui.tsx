@@ -68,7 +68,7 @@ function useClaudeUsage() {
     onMount(() => {
         const stop = pollClaudeUsage({
             onResult: (usage) => setStore(reconcile(usage)),
-            pollSeconds: 60,
+            pollMinutes: 5,
             log: (message, extra) =>
                 client.app.log({
                     service: "opencode-claude-usage",
@@ -96,7 +96,11 @@ function ProgressBar(props: ProgressBarProps) {
 
     const [width, setWidth] = createSignal(0)
 
-    const color = () => theme.text
+    const color = () => {
+        if (props.progress > 0.9) return theme.error
+        if (props.progress > 0.7) return theme.warning
+        return theme.text
+    }
 
     const handleResize = () => {
         setImmediate(() => {
