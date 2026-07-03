@@ -13,13 +13,13 @@ type LogFn = (message: string, extra?: Record<string, unknown>) => void
 
 type PollArgs = {
     onResult: (usage: UsageItem[]) => void
-    pollSeconds: number
+    pollMinutes: number
     log: LogFn
 }
 
 export function pollClaudeUsage(args: PollArgs) {
     fetchUsage(args)
-    const interval = setInterval(() => fetchUsage(args), args.pollSeconds * 1000)
+    const interval = setInterval(() => fetchUsage(args), args.pollMinutes * 1000)
     return () => {
         clearInterval(interval)
     }
@@ -55,8 +55,9 @@ async function fetchUsage(args: PollArgs) {
     const text = await $`claude -p /usage`.text().catch(() => null)
     if (!text) return
 
-    const newUsage = await parseUsage(text, args.log)
-    args.log("parsed usage", { newUsage })
+    const usage = await parseUsage(text)
+    if (!usage.length) return
 
-    args.onResult(newUsage)
+    args.log("Parsed claude usage", { usage })
+    args.onResult(usage)
 }
