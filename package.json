@@ -1,8 +1,21 @@
 {
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "dependencies": {
-    "@opencode-ai/plugin": "^1.17.13"
-  }
+    "name": "opencode-claude-usage",
+    "version": "1.0.0",
+    "type": "module",
+    "exports": {
+        "./tui": "./src/tui.tsx"
+    },
+    "devDependencies": {
+        "@opencode-ai/plugin": "^1.17.13",
+        "@opentui/core": "^0.4.2",
+        "@opentui/solid": "^0.4.2",
+        "@types/bun": "latest",
+        "solid-js": "^1.9.14"
+    },
+    "peerDependencies": {
+        "@opencode-ai/plugin": "^1.17.13",
+        "@opentui/core": "^0.4.2",
+        "@opentui/solid": "^0.4.2",
+        "solid-js": "^1.9.14"
+    }
 }
