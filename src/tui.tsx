@@ -33,7 +33,7 @@ const tui: TuiPlugin = async (api) => {
 }
 
 export default {
-    id: "opencode-claude-usage",
+    id: "opencode-usage-bar",
     tui,
 } satisfies TuiPluginModule
 
@@ -71,7 +71,7 @@ function useClaudeUsage() {
             pollMinutes: 5,
             log: (message, extra) =>
                 client.app.log({
-                    service: "opencode-claude-usage",
+                    service: "opencode-usage-bar",
                     level: "info",
                     message,
                     extra,

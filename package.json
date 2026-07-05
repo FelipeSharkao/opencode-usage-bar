@@ -1,5 +1,5 @@
 {
-    "name": "opencode-claude-usage",
+    "name": "opencode-usage-bar",
     "version": "1.0.0",
     "type": "module",
     "exports": {
