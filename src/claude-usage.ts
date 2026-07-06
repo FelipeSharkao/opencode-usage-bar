@@ -19,7 +19,7 @@ type PollArgs = {
 
 export function pollClaudeUsage(args: PollArgs) {
     fetchUsage(args)
-    const interval = setInterval(() => fetchUsage(args), args.pollMinutes * 1000)
+    const interval = setInterval(() => fetchUsage(args), args.pollMinutes * 60_000)
     return () => {
         clearInterval(interval)
     }
