@@ -6,6 +6,7 @@ export type DisposableLike =
     | { stop(): Awaitable<void> }
     | { close(): Awaitable<void> }
     | { abort(): Awaitable<void> }
+    | { destroy(): Awaitable<void> }
     | (() => Awaitable<void>)
 
 export function dispose(v: DisposableLike) {
@@ -14,6 +15,7 @@ export function dispose(v: DisposableLike) {
     else if ("stop" in v) v.stop()
     else if ("close" in v) v.close()
     else if ("abort" in v) v.abort()
+    else if ("destroy" in v) v.destroy()
     else v()
 }
 
