@@ -1,13 +1,5 @@
-# Git
-.gitignore
-
 # OpenCode local config
 .opencode/
-
-# Dev config
-tsconfig.json
-.editorconfig
-.prettierrc
 
 # Docs (screenshots, not used at runtime)
 docs/
