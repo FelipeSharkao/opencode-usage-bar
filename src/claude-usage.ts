@@ -1,28 +1,23 @@
 import { $ } from "bun"
 
-export type UsageItem = {
-    /** The name of the item */
-    name: string
-    /** The current usage [0, 1] */
-    percent: number
-    /** The formatted time when the usage resets */
-    resets: string | undefined
-}
+import type { LogFn, UsageItem } from "./types"
+import { abortableTimeout } from "./abort"
 
-type LogFn = (message: string, extra?: Record<string, unknown>) => void
+const CLAUDE_POLL_INTERVAL = 2 * 60_000 // 5 minutes
 
 type PollArgs = {
+    abortController: AbortController
     onResult: (usage: UsageItem[]) => void
-    pollMinutes: number
     log: LogFn
 }
 
 export function pollClaudeUsage(args: PollArgs) {
     fetchUsage(args)
-    const interval = setInterval(() => fetchUsage(args), args.pollMinutes * 60_000)
-    return () => {
-        clearInterval(interval)
-    }
+    abortableTimeout(
+        args.abortController.signal,
+        () => fetchUsage(args),
+        CLAUDE_POLL_INTERVAL,
+    )
 }
 
 export async function parseUsage(text: string) {
@@ -52,12 +47,15 @@ export async function parseUsage(text: string) {
 }
 
 async function fetchUsage(args: PollArgs) {
-    const text = await $`claude -p /usage`.text().catch(() => null)
-    if (!text) return
+    try {
+        const text = await $`claude -p /usage`.text().catch(() => null)
+        if (!text) return
 
-    const usage = await parseUsage(text)
-    if (!usage.length) return
+        const usage = await parseUsage(text)
+        args.log("Parsed claude usage", { usage })
 
-    args.log("Parsed claude usage", { usage })
-    args.onResult(usage)
+        if (usage.length || !args.abortController.signal.aborted) args.onResult(usage)
+    } catch (error) {
+        args.log("Failed to fetch claude usage", { error })
+    }
 }

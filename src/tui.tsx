@@ -9,24 +9,43 @@ import {
     onMount,
     useContext,
 } from "solid-js"
-import { pollClaudeUsage, type UsageItem } from "./claude-usage"
 import { createStore, reconcile } from "solid-js/store"
+import { startUsages } from "./usage"
+import type { LogFn, Usage } from "./types"
+
+// NOTE: OpenCode replaces the solid-js dependency with its own version, but only for the
+// plugin entry point. Splitting the UI code into a separate file is thus only possible if
+// we bundle the code. Keeping everything on the same file is easier.
 
 const PluginContext = createContext<{
     theme: TuiThemeCurrent
     client: OpencodeClient
+    log: LogFn
 }>()
 
 const tui: TuiPlugin = async (api) => {
+    const log: LogFn = (message, extra) =>
+        api.client.app.log({
+            service: "opencode-usage-bar",
+            level: "info",
+            message: `[opencode-usage-bar] ${message}`,
+            extra,
+        })
+
     api.slots.register({
         order: 100,
         slots: {
             sidebar_content: () => (
-                <PluginContext.Provider
-                    value={{ theme: api.theme.current, client: api.client }}
-                >
-                    <SidebarUsage />
-                </PluginContext.Provider>
+                // NOTE: OpenCode don't like for reactive elements to be in the top level
+                // of the slot, and will make the whole slot remount when it changes. This
+                // box-wrapping is absolutely necessary for keeping our internal state.
+                <box width="100%" rowGap={1}>
+                    <PluginContext.Provider
+                        value={{ theme: api.theme.current, client: api.client, log }}
+                    >
+                        <SidebarUsage />
+                    </PluginContext.Provider>
+                </box>
             ),
         },
     })
@@ -40,45 +59,48 @@ export default {
 function SidebarUsage() {
     const { theme } = useContext(PluginContext)!
 
-    const usage = useClaudeUsage()
+    const usages = useUsages()
 
     return (
-        <box width="100%">
-            <text width="100%" fg={theme.text}>
-                <b>Claude Usage</b>
-            </text>
-            <For each={usage}>
-                {(item) => (
-                    <ProgressBar
-                        label={item.name}
-                        progress={item.percent}
-                        resets={item.resets}
-                    />
-                )}
-            </For>
-        </box>
+        <For each={usages}>
+            {(usage) => (
+                <box width="100%">
+                    <text width="100%" fg={theme.text}>
+                        <b>{usage.provider} Usage</b>
+                    </text>
+                    <For each={usage.items}>
+                        {(item) => (
+                            <ProgressBar
+                                label={item.name}
+                                progress={item.percent}
+                                resets={item.resets}
+                            />
+                        )}
+                    </For>
+                </box>
+            )}
+        </For>
     )
 }
 
-function useClaudeUsage() {
-    const { client } = useContext(PluginContext)!
+function useUsages() {
+    const { log } = useContext(PluginContext)!
 
-    const [store, setStore] = createStore<UsageItem[]>([])
+    const [store, setStore] = createStore<Usage[]>([])
 
     onMount(() => {
-        const stop = pollClaudeUsage({
-            onResult: (usage) => setStore(reconcile(usage)),
-            pollMinutes: 5,
-            log: (message, extra) =>
-                client.app.log({
-                    service: "opencode-usage-bar",
-                    level: "info",
-                    message,
-                    extra,
-                }),
-        })
+        const controller = new AbortController()
 
-        onCleanup(() => stop())
+        void startUsages({
+            abortController: controller,
+            onResult: (usages) => {
+                log("Polled usages", { usages })
+                setStore(reconcile(usages))
+            },
+            log,
+        }).catch((e) => log("Failed to start usages", { error: e }))
+
+        onCleanup(() => controller.abort())
     })
 
     return store
