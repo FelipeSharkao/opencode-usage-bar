@@ -1,10 +1,11 @@
 import fs from "node:fs/promises"
+import net from "node:net"
 import os from "node:os"
 import path from "node:path"
 
 import { pollClaudeUsage } from "./claude-usage"
 import type { LogFn, Usage } from "./types"
-import { disposeIfAborted } from "./abort"
+import { abortableTimeout, disposeIfAborted } from "./abort"
 
 const PIPE_NAME = "opencode-usage-bar"
 const LOCK_PATH = path.join(os.tmpdir(), `${PIPE_NAME}.lock`)
@@ -75,27 +76,24 @@ export async function startUsages(args: UsageArgs): Promise<void> {
 
 async function startUsagesServer(args: UsageArgs) {
     let usages: Usage[] = []
-    const socks = new Set<Bun.Socket>()
+    const socks = new Set<net.Socket>()
 
-    const server = Bun.listen({
-        unix: PIPE_PATH,
-        socket: {
-            open(socket) {
-                socks.add(socket)
-                socket.write(JSON.stringify(usages))
-            },
-            close(socket) {
-                socks.delete(socket)
-            },
-            error(socket) {
-                socks.delete(socket)
-            },
-            data() {
-                // This is required by Bun, bu we will not handle any data from the client
-            },
-        },
+    const server = net.createServer((socket) => {
+        socks.add(socket)
+        socket.write(JSON.stringify(usages))
+        socket.on("close", () => socks.delete(socket))
+        socket.on("error", () => socks.delete(socket))
     })
     if (disposeIfAborted(args.abortController.signal, server)) return
+
+    await new Promise<void>((res, rej) => {
+        server.once("error", rej)
+        server.once("listening", () => {
+            server.off("error", rej)
+            res()
+        })
+        server.listen(PIPE_PATH)
+    })
 
     const claudeUsageIdx = usages.length
     usages.push({ provider: "Claude", items: [] })
@@ -115,21 +113,31 @@ async function startUsagesServer(args: UsageArgs) {
 }
 
 async function startUsagesClient(args: UsageArgs) {
-    const conn = await Bun.connect({
-        unix: PIPE_PATH,
-        socket: {
-            data(_, data) {
-                const usages = JSON.parse(data.toString()) as Usage[]
-                args.onResult(usages)
-            },
-            async close() {
-                await Bun.sleep(Math.random() * RE_ELECTION_JITTER)
-                if (args.abortController.signal.aborted) return
-                startUsagesClient(args)
-            },
-        },
+    const conn = await new Promise<net.Socket>((res, rej) => {
+        const conn = net.createConnection({ path: PIPE_PATH })
+        conn.once("error", rej)
+        conn.once("connect", () => {
+            conn.off("error", rej)
+            res(conn)
+        })
     })
+
     if (disposeIfAborted(args.abortController.signal, conn)) return
+
+    for (const ev in ["close", "error"] as const) {
+        conn.on(ev, () => {
+            abortableTimeout(
+                args.abortController.signal,
+                () => startUsagesClient(args),
+                Math.random() * RE_ELECTION_JITTER,
+            )
+        })
+    }
+
+    conn.on("data", (data) => {
+        const usages = JSON.parse(data.toString()) as Usage[]
+        args.onResult(usages)
+    })
 
     args.log("Connected to server")
 }
