@@ -86,7 +86,7 @@ function SidebarUsage() {
 function useUsages() {
     const { log } = useContext(PluginContext)!
 
-    const [store, setStore] = createStore<Usage[]>([])
+    const [store, setStore] = createStore<Usage[]>([{ provider: "Loading", items: [] }])
 
     onMount(() => {
         const controller = new AbortController()
