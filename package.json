@@ -1,6 +1,6 @@
 {
     "name": "opencode-usage-bar",
-    "version": "1.1.2",
+    "version": "1.1.1",
     "type": "module",
     "repository": {
         "type": "git",
@@ -12,14 +12,7 @@
     "exports": {
         "./tui": "./src/tui.tsx"
     },
-    "devDependencies": {
-        "@opencode-ai/plugin": "^1.15.0",
-        "@opentui/core": "^0.2.10",
-        "@opentui/solid": "^0.2.10",
-        "@types/bun": "latest",
-        "solid-js": "^1.9.10"
-    },
-    "peerDependencies": {
+    "dependencies": {
         "@opencode-ai/plugin": ">=1.15.0",
         "@opentui/core": ">=0.2.10",
         "@opentui/solid": ">=0.2.10",

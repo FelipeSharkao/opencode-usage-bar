@@ -1,4 +1,4 @@
-import { exec } from "node:child_process"
+import { $ } from "bun"
 
 import type { LogFn, UsageItem } from "./types"
 import { abortableTimeout } from "./abort"
@@ -46,16 +46,16 @@ export async function parseUsage(text: string) {
     return result
 }
 
-function fetchUsage(args: PollArgs) {
-    exec("claude -p /usage", async (e, text) => {
-        if (e || !text) return
-        try {
-            const usage = await parseUsage(text)
-            args.log("Parsed claude usage", { usage })
+async function fetchUsage(args: PollArgs) {
+    try {
+        const text = await $`claude -p /usage`.text().catch(() => null)
+        if (!text) return
 
-            if (usage.length || !args.abortController.signal.aborted) args.onResult(usage)
-        } catch (error) {
-            args.log("Failed to fetch claude usage", { error })
-        }
-    })
+        const usage = await parseUsage(text)
+        args.log("Parsed claude usage", { usage })
+
+        if (usage.length || !args.abortController.signal.aborted) args.onResult(usage)
+    } catch (error) {
+        args.log("Failed to fetch claude usage", { error })
+    }
 }
